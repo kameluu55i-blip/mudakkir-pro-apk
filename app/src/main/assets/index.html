@@ -1,0 +1,2471 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#059669" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>مُذكِّر برو | إدارة الاشتراكات والملاحظات والتنبيهات الفورية</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Cairo', 'Inter', 'system-ui', 'sans-serif'],
+            mono: ['Inter', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body { font-family: 'Cairo', 'Inter', system-ui, sans-serif; overflow-x: hidden; }
+    .num-ltr { direction: ltr; display: inline-block; font-family: 'Inter', 'Cairo', sans-serif; }
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .alarm-pulse { animation: pulseRing 1.6s infinite; }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-slide-down { animation: slideDown 0.25s ease-out forwards; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: rgba(100, 116, 139, 0.35); border-radius: 9999px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 min-h-screen pb-24 transition-colors duration-200">
+
+  <!-- Toast Container -->
+  <div id="toastContainer" class="fixed top-4 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Urgent Instant Notification Overlay -->
+  <div id="urgentAlertOverlay" class="hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 border-2 border-rose-500 rounded-3xl max-w-md w-full p-6 shadow-2xl animate-slide-down relative overflow-hidden">
+      <div class="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-l from-rose-500 via-amber-500 to-emerald-500"></div>
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/80 text-rose-600 dark:text-rose-400 flex items-center justify-center alarm-pulse">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+          </div>
+          <div>
+            <span id="alertTypeBadge" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300">تنبيه فوري الآن</span>
+            <h3 id="alertTitle" class="text-lg font-extrabold text-slate-900 dark:text-white mt-1">حان موعد التنبيه!</h3>
+          </div>
+        </div>
+        <span id="alertTimeStamp" class="text-xs font-semibold text-slate-500 dark:text-slate-400 num-ltr"></span>
+      </div>
+
+      <div id="alertBodyBox" class="bg-slate-50 dark:bg-slate-800/70 rounded-2xl p-4 mb-5 border border-slate-200/80 dark:border-slate-700/70 text-sm text-slate-700 dark:text-slate-200 space-y-1.5">
+      </div>
+
+      <div id="alertPrimaryActions" class="grid grid-cols-2 gap-2.5 mb-2.5">
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <button type="button" id="btnSnooze5m" onclick="snoozeActiveAlert(5)" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 dark:text-amber-300 transition">
+          غفوة 5 دقائق
+        </button>
+        <button type="button" id="btnSnooze60m" onclick="snoozeActiveAlert(60)" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-800 dark:bg-amber-900/40 dark:hover:bg-amber-900/60 dark:text-amber-300 transition">
+          غفوة ساعة
+        </button>
+        <button type="button" id="btnDismissAlert" onclick="dismissActiveAlert()" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 transition">
+          إغلاق التنبيه
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top App Bar -->
+  <header class="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800">
+    <div class="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+          </svg>
+        </div>
+        <div class="truncate">
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-extrabold tracking-tight text-slate-900 dark:text-white truncate">مُذكِّر برو</h1>
+            <span id="liveClockBadge" class="hidden sm:inline-block text-[11px] font-semibold px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 num-ltr">--:--:--</span>
+          </div>
+          <p class="text-xs text-slate-500 dark:text-slate-400 truncate">إدارة اشتراكات العملاء والملاحظات والتنبيه الفوري</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <button type="button" id="btnQuickTestAlert" onclick="scheduleTestAlert()" class="px-2.5 sm:px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:hover:bg-rose-900/60 dark:text-rose-300 border border-rose-200/70 dark:border-rose-800/60 flex items-center gap-1.5 transition" title="اختبار الإشعار الفوري بعد 3 ثوانٍ">
+          <span class="w-2 h-2 rounded-full bg-rose-500 animate-ping"></span>
+          <span class="hidden md:inline">تجربة الإشعار</span>
+          <span class="md:hidden">اختبار</span>
+        </button>
+
+        <button type="button" id="btnToggleMute" onclick="toggleSoundMute()" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition" title="تشغيل / كتم صوت التنبيه">
+          <span id="iconSoundState" class="text-base leading-none">🔊</span>
+        </button>
+
+        <button type="button" id="btnToggleTheme" onclick="toggleThemeMode()" class="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition" title="الوضع الليلي / النهاري">
+          <span id="iconThemeState" class="text-base leading-none">🌙</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-5xl mx-auto px-4 pt-4 space-y-5">
+
+    <!-- Demo Data Notice Banner -->
+    <div id="demoBanner" class="hidden bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5 text-xs sm:text-sm text-amber-900 dark:text-amber-200">
+        <span class="text-lg">💡</span>
+        <span>هذه أمثلة توضيحية جاهزة لتجربة العد التنازلي والرسائل فوراً. يمكنك تعديلها أو حذفها للبدء ببياناتك الخاصة.</span>
+      </div>
+      <button type="button" id="btnClearDemo" onclick="promptClearDemoItems()" class="shrink-0 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-200/80 hover:bg-amber-300 text-amber-950 dark:bg-amber-800/70 dark:hover:bg-amber-700 dark:text-amber-100 transition">
+        حذف الأمثلة التجريبية
+      </button>
+    </div>
+
+    <!--Quick Add Action Strip-->
+    <div class="grid grid-cols-2 gap-3">
+      <button type="button" id="btnHeroAddSub" onclick="openSubModal()" class="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-emerald-600/20 transition">
+        <span class="text-lg leading-none">＋</span>
+        <span>إضافة اشتراك عميل</span>
+      </button>
+      <button type="button" id="btnHeroAddNote" onclick="openNoteModal()" class="flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-indigo-600/20 transition">
+        <span class="text-lg leading-none">📝</span>
+        <span>كتابة ملاحظة أو موعد</span>
+      </button>
+    </div>
+
+    <!-- VIEW 1: DASHBOARD -->
+    <section id="view-dashboard" class="space-y-5">
+      <!-- KPI Grid -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span>الاشتراكات النشطة</span>
+            <span class="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm">👥</span>
+          </div>
+          <div id="kpiActiveSubs" class="text-2xl font-extrabold text-slate-900 dark:text-white mt-2 num-ltr">0</div>
+          <p id="kpiTotalSubsSubtext" class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">من إجمالي 0 مشترك</p>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span>تستحق قريباً / متأخرة</span>
+            <span class="w-8 h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center text-sm">⏰</span>
+          </div>
+          <div id="kpiUrgentCount" class="text-2xl font-extrabold text-rose-600 dark:text-rose-400 mt-2 num-ltr">0</div>
+          <p id="kpiUnpaidSubtext" class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">0 اشتراك غير مدفوع</p>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span>التحصيل الشهري المتوقع</span>
+            <span class="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm">💰</span>
+          </div>
+          <div id="kpiMonthlyRev" class="text-2xl font-extrabold text-slate-900 dark:text-white mt-2">0 ج.م</div>
+          <p id="kpiCollectedSubtext" class="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">محصّل فعلياً: 0 ج.م</p>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
+            <span>الملاحظات والتذكيرات</span>
+            <span class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-sm">📌</span>
+          </div>
+          <div id="kpiNotesCount" class="text-2xl font-extrabold text-slate-900 dark:text-white mt-2 num-ltr">0</div>
+          <p id="kpiPinnedSubtext" class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">0 مثبتة • 0 منبه نشط</p>
+        </div>
+      </div>
+
+      <!-- Upcoming Live Countdown & Analytics Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- Upcoming Live Feed -->
+        <div class="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h2 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <span>⚡</span>
+                <span>أقرب المواعيد والتنبيهات القادمة</span>
+              </h2>
+              <p class="text-xs text-slate-500 dark:text-slate-400">عدّاد تنازلي لحظي يطلق إشعاراً صوتياً ومرئياً فور حلول الموعد</p>
+            </div>
+            <button type="button" id="btnGoAlertsFromDash" onclick="switchTab('alerts')" class="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline">
+              كل التنبيهات ←
+            </button>
+          </div>
+          <div id="upcomingFeedList" class="space-y-2.5 flex-1"></div>
+        </div>
+
+        <!-- Chart Card -->
+        <div class="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm flex flex-col">
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <h2 class="text-base font-extrabold text-slate-900 dark:text-white">تحليل الاشتراكات والدخل</h2>
+            <div class="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 text-xs font-bold">
+              <button type="button" id="btnChartModeStatus" onclick="setChartMode('status')" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm transition">الحالات</button>
+              <button type="button" id="btnChartModeService" onclick="setChartMode('service')" class="px-2.5 py-1 rounded-lg text-slate-600 dark:text-slate-300 transition">الخدمات</button>
+            </div>
+          </div>
+          <div class="relative h-64 w-full flex-1">
+            <canvas id="overviewChart"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: SUBSCRIPTIONS -->
+    <section id="view-subscriptions" class="hidden space-y-4">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <div class="relative flex-1">
+            <input type="text" id="subSearchInput" oninput="renderSubscriptions()" placeholder="ابحث باسم المشترك، رقم الهاتف، @اليوزر، أو اسم الباقة..." class="w-full pl-4 pr-10 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            <span class="absolute right-3.5 top-2.5 text-slate-400">🔍</span>
+          </div>
+          <select id="subSortSelect" onchange="renderSubscriptions()" class="px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500">
+            <option value="due_asc">الأقرب انتهاءً أولاً</option>
+            <option value="amount_desc">الأعلى سعراً أولاً</option>
+            <option value="name_asc">ترتيب أبجدي</option>
+          </select>
+        </div>
+
+        <!-- Filter Pills -->
+        <div id="subFilterBar" class="flex items-center gap-1.5 overflow-x-auto pb-1">
+          <button type="button" data-subfilter="all" onclick="setSubFilter('all')" class="sub-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-emerald-600 text-white">الكل</button>
+          <button type="button" data-subfilter="urgent" onclick="setSubFilter('urgent')" class="sub-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">ينتهي قريباً / منتهي</button>
+          <button type="button" data-subfilter="active" onclick="setSubFilter('active')" class="sub-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">نشط</button>
+          <button type="button" data-subfilter="unpaid" onclick="setSubFilter('unpaid')" class="sub-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">غير مدفوع</button>
+        </div>
+      </div>
+
+      <div id="subscriptionsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5"></div>
+    </section>
+
+    <!-- VIEW 3: NOTES & TASKS -->
+    <section id="view-notes" class="hidden space-y-4">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="relative">
+          <input type="text" id="noteSearchInput" oninput="renderNotes()" placeholder="ابحث في عناوين الملاحظات، التفاصيل، أو قوائم المهام..." class="w-full pl-4 pr-10 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <span class="absolute right-3.5 top-2.5 text-slate-400">🔍</span>
+        </div>
+        <div id="noteCategoryBar" class="flex items-center gap-1.5 overflow-x-auto pb-1">
+          <button type="button" data-notecat="all" onclick="setNoteCategoryFilter('all')" class="note-cat-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-indigo-600 text-white">كل الملاحظات</button>
+          <button type="button" data-notecat="pinned" onclick="setNoteCategoryFilter('pinned')" class="note-cat-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">📌 المثبتة</button>
+          <button type="button" data-notecat="شغل واشتراكات" onclick="setNoteCategoryFilter('شغل واشتراكات')" class="note-cat-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">💼 شغل واشتراكات</button>
+          <button type="button" data-notecat="مهام عاجلة" onclick="setNoteCategoryFilter('مهام عاجلة')" class="note-cat-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">🔥 مهام عاجلة</button>
+          <button type="button" data-notecat="أفكار وتطوير" onclick="setNoteCategoryFilter('أفكار وتطوير')" class="note-cat-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">💡 أفكار وتطوير</button>
+          <button type="button" data-notecat="شخصي" onclick="setNoteCategoryFilter('شخصي')" class="note-cat-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">🏠 شخصي</button>
+        </div>
+      </div>
+
+      <div id="notesGrid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5"></div>
+    </section>
+
+    <!-- VIEW 4: ALERTS & SOUND SETTINGS -->
+    <section id="view-alerts" class="hidden space-y-4">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 sm:p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-extrabold text-slate-900 dark:text-white">مركز الإشعارات الفورية وضبط المنبه</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">تحكم في نغمة الرنين، التنبيه المبكر، وصلاحية إشعارات الهاتف والنظام</p>
+          </div>
+          <button type="button" id="btnRequestPerm" onclick="requestSystemNotificationPermission()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition">
+            تفعيل إشعارات النظام 🔔
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div>
+            <label for="selectAlarmTone" class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">نغمة التنبيه الفوري</label>
+            <div class="flex gap-1.5">
+              <select id="selectAlarmTone" onchange="updateAlertPreferences()" class="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+                <option value="crystal">نغمة كريستال واضحة</option>
+                <option value="urgent">جرس تنبيه قوي ومزدوج</option>
+                <option value="digital">نبض رقمي سريع</option>
+              </select>
+              <button type="button" id="btnPreviewTone" onclick="playAlarmChime(true)" class="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold" title="سماع النغمة">
+                ▶️ تجربة
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label for="selectPreAlert" class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">تنبيه استباقي قبل الموعد</label>
+            <select id="selectPreAlert" onchange="updateAlertPreferences()" class="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+              <option value="0">في الموعد المحدد بالضبط فقط</option>
+              <option value="15">قبل الموعد بـ 15 دقيقة + عند الموعد</option>
+              <option value="60">قبل الموعد بساعة + عند الموعد</option>
+              <option value="1440">قبل الموعد بيوم كامل + عند الموعد</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">حالة محرك المراقبة اللحظي</label>
+            <div id="bridgeStatusBox" class="px-3 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200/70 dark:border-emerald-800/60 text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span id="bridgeStatusText">نشط ويفحص المواعيد كل ثانية</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scheduled Active Alarms & Log -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <h3 class="text-sm font-extrabold text-slate-900 dark:text-white mb-3">⏰ المنبهات المجدولة القادمة</h3>
+          <div id="scheduledAlarmsList" class="space-y-2.5"></div>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-extrabold text-slate-900 dark:text-white">🔔 سجل الإشعارات التي انطلقت</h3>
+            <button type="button" id="btnClearHistory" onclick="clearNotificationLog()" class="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline">مسح السجل</button>
+          </div>
+          <div id="triggeredLogList" class="space-y-2"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 5: BACKUP & APK INFO -->
+    <section id="view-settings" class="hidden space-y-4">
+      <!-- Backup & Export -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-4">
+        <div>
+          <h2 class="text-base font-extrabold text-slate-900 dark:text-white">النسخ الاحتياطي وتصدير البيانات</h2>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">احفظ بيانات المشتركين والملاحظات في ملف خارجي أو انقلها لأي هاتف آخر بأمان</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button type="button" id="btnExportJson" onclick="exportBackupJson()" class="p-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 border border-emerald-200 dark:border-emerald-800/70 text-right transition">
+            <div class="text-lg mb-1">📥</div>
+            <div class="text-xs font-extrabold text-emerald-900 dark:text-emerald-200">تصدير نسخة احتياطية شاملة (JSON)</div>
+            <div class="text-[11px] text-emerald-700 dark:text-emerald-400 mt-0.5">يشمل الاشتراكات والملاحظات والإعدادات</div>
+          </button>
+
+          <label for="inputImportJson" class="cursor-pointer p-3.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/50 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800/70 text-right transition block">
+            <div class="text-lg mb-1">📤</div>
+            <div class="text-xs font-extrabold text-indigo-900 dark:text-indigo-200">استعادة نسخة محفوظة (JSON)</div>
+            <div class="text-[11px] text-indigo-700 dark:text-indigo-400 mt-0.5">استيراد ملف بيانات سبق حفظه</div>
+            <input type="file" id="inputImportJson" accept=".json,application/json" onchange="importBackupJson(event)" class="hidden" />
+          </label>
+
+          <button type="button" id="btnExportCsv" onclick="exportSubscribersCsv()" class="p-3.5 rounded-2xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-200 dark:border-amber-800/70 text-right transition">
+            <div class="text-lg mb-1">📊</div>
+            <div class="text-xs font-extrabold text-amber-900 dark:text-amber-200">تصدير جدول المشتركين (Excel CSV)</div>
+            <div class="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5">ملف جاهز للفتح في إكسل باللغة العربية</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- WhatsApp / Telegram Custom Message Template -->
+      <div class="bg-white dark:bg-slate-900 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-800 shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-extrabold text-slate-900 dark:text-white">قالب رسالة تذكير المشتركين (واتساب / تيليجرام)</h2>
+            <p class="text-xs text-slate-500 dark:text-slate-400">المتغيرات المتاحة: <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">{الاسم}</code> <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">{الخدمة}</code> <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">{المبلغ}</code> <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">{الموعد}</code></p>
+          </div>
+          <button type="button" id="btnSaveTemplate" onclick="saveCustomTemplate()" class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 dark:bg-emerald-600 text-white hover:opacity-90 transition">
+            حفظ القالب
+          </button>
+        </div>
+        <textarea id="textareaMsgTemplate" rows="3" class="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+      </div>
+
+      <!-- Android APK Native Integration Guide -->
+      <div class="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-5 shadow-md space-y-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-xl">🤖</div>
+          <div>
+            <h2 class="text-base font-extrabold">جاهز للعمل كتطبيق أندرويد أصلي (APK)</h2>
+            <p class="text-xs text-slate-300">يدعم الربط المباشر مع منبه النظام في أندرويد (AlarmManager) للعمل حتى والشاشة مغلقة</p>
+          </div>
+        </div>
+        <div class="text-xs text-slate-300 leading-relaxed space-y-1.5 bg-white/5 rounded-xl p-3.5 border border-white/10">
+          <p>• ارفع ملفات مشروع الأندرويد المرفق (<span class="num-ltr font-semibold text-emerald-300">Mudakkir_Android_APK_Project.zip</span>) إلى مستودع GitHub خاص بك، وسيقوم مسار <span class="num-ltr font-semibold text-emerald-300">GitHub Actions</span> المدمج ببناء ملف <span class="num-ltr font-semibold text-emerald-300">app-debug.apk</span> تلقائياً للتحميل والتثبيت المباشر على هاتفك.</p>
+          <p>• كما يمكنك تثبيت هذه النسخة فوراً على شاشة هاتفك الرئيسية من متصفح Chrome عبر القائمة (⋮) ثم اختيار <strong>"تثبيت التطبيق / الإضافة إلى الشاشة الرئيسية"</strong>.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Mobile Navigation Bar -->
+  <nav class="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800">
+    <div class="max-w-5xl mx-auto px-2 py-1.5 grid grid-cols-5 gap-1">
+      <button type="button" data-navtab="dashboard" onclick="switchTab('dashboard')" class="nav-tab-btn flex flex-col items-center justify-center py-1.5 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/50 font-bold transition">
+        <span class="text-base leading-none">🏠</span>
+        <span class="text-[11px] mt-1">الرئيسية</span>
+      </button>
+      <button type="button" data-navtab="subscriptions" onclick="switchTab('subscriptions')" class="nav-tab-btn relative flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold transition">
+        <span class="text-base leading-none">👥</span>
+        <span class="text-[11px] mt-1">الاشتراكات</span>
+        <span id="navBadgeSubs" class="hidden absolute top-1 left-1/4 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center num-ltr">0</span>
+      </button>
+      <button type="button" data-navtab="notes" onclick="switchTab('notes')" class="nav-tab-btn flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold transition">
+        <span class="text-base leading-none">📝</span>
+        <span class="text-[11px] mt-1">الملاحظات</span>
+      </button>
+      <button type="button" data-navtab="alerts" onclick="switchTab('alerts')" class="nav-tab-btn flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold transition">
+        <span class="text-base leading-none">🔔</span>
+        <span class="text-[11px] mt-1">التنبيهات</span>
+      </button>
+      <button type="button" data-navtab="settings" onclick="switchTab('settings')" class="nav-tab-btn flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold transition">
+        <span class="text-base leading-none">⚙️</span>
+        <span class="text-[11px] mt-1">الضبط وAPK</span>
+      </button>
+    </div>
+  </nav>
+
+  <!-- MODAL: ADD / EDIT SUBSCRIPTION -->
+  <div id="subModal" class="hidden fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white dark:bg-slate-900 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 max-h-[92vh] overflow-y-auto shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="subModalTitle" class="text-lg font-extrabold text-slate-900 dark:text-white">إضافة اشتراك عميل جديد</h3>
+        <button type="button" id="btnCloseSubModal" onclick="closeSubModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold">✕</button>
+      </div>
+
+      <form id="subForm" onsubmit="saveSubscriptionForm(event)" class="space-y-3.5">
+        <input type="hidden" id="subEditId" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="subClientName" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">اسم المشترك *</label>
+            <input type="text" id="subClientName" required placeholder="مثال: أحمد محمود" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div>
+            <label for="subContact" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">رقم واتساب أو @تيليجرام</label>
+            <input type="text" id="subContact" placeholder="201012345678 أو @username" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm num-ltr text-right focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="subServiceName" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">اسم الباقة / الخدمة *</label>
+            <input type="text" id="subServiceName" required placeholder="مثال: اشتراك بوت النشر VIP" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-2">
+              <label for="subAmount" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">قيمة الاشتراك *</label>
+              <input type="number" id="subAmount" required min="0" step="any" placeholder="250" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm num-ltr text-right focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label for="subCurrency" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">العملة</label>
+              <select id="subCurrency" class="w-full px-2 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold">
+                <option value="ج.م">ج.م</option>
+                <option value="$">$</option>
+                <option value="ر.س">ر.س</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="subCycle" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">دورة التجديد</label>
+            <select id="subCycle" onchange="applyCyclePresetFromSelect()" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold">
+              <option value="monthly">شهري (كل 30 يوم)</option>
+              <option value="weekly">أسبوعي (كل 7 أيام)</option>
+              <option value="quarterly">ربع سنوي (كل 3 شهور)</option>
+              <option value="yearly">سنوي (كل سنة)</option>
+            </select>
+          </div>
+          <div>
+            <label for="subPaidStatus" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">حالة الدفع الحالية</label>
+            <select id="subPaidStatus" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold">
+              <option value="paid">مدفوع بالكامل ✅</option>
+              <option value="unpaid">معلق / لم يدفع بعد ⏳</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/50 rounded-2xl p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <label for="subDueDateTime" class="text-xs font-extrabold text-emerald-900 dark:text-emerald-200">🔔 موعد انتهاء الاشتراك والتنبيه الفوري *</label>
+            <label class="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 cursor-pointer">
+              <input type="checkbox" id="subAlarmEnabled" checked class="rounded text-emerald-600 focus:ring-emerald-500" />
+              <span>تفعيل المنبه</span>
+            </label>
+          </div>
+          <input type="datetime-local" id="subDueDateTime" required class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 text-sm num-ltr focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+          <div class="flex flex-wrap gap-1.5 pt-1">
+            <button type="button" onclick="setQuickSubDate(1)" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold hover:border-emerald-500 transition">بعد دقيقة (للتجربة)</button>
+            <button type="button" onclick="setQuickSubDate(1440)" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold hover:border-emerald-500 transition">غداً</button>
+            <button type="button" onclick="setQuickSubDate(10080)" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold hover:border-emerald-500 transition">بعد أسبوع</button>
+            <button type="button" onclick="setQuickSubDate(43200)" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold hover:border-emerald-500 transition">بعد شهر</button>
+          </div>
+        </div>
+
+        <div>
+          <label for="subNotes" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">ملاحظات إضافية</label>
+          <textarea id="subNotes" rows="2" placeholder="تفاصيل الحساب، السيرفر، طريقة الدفع المفضلة..." class="w-full px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2.5 pt-2">
+          <button type="submit" id="btnSubmitSub" class="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-lg shadow-emerald-600/20 transition">
+            حفظ وجدولة الإشعار
+          </button>
+          <button type="button" onclick="closeSubModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm font-bold transition">
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: ADD / EDIT NOTE -->
+  <div id="noteModal" class="hidden fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div class="bg-white dark:bg-slate-900 w-full sm:max-w-lg rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 border border-slate-200 dark:border-slate-800 max-h-[92vh] overflow-y-auto shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="noteModalTitle" class="text-lg font-extrabold text-slate-900 dark:text-white">كتابة ملاحظة أو مهمة جديدة</h3>
+        <button type="button" id="btnCloseNoteModal" onclick="closeNoteModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-600 dark:text-slate-300 font-bold">✕</button>
+      </div>
+
+      <form id="noteForm" onsubmit="saveNoteForm(event)" class="space-y-3.5">
+        <input type="hidden" id="noteEditId" />
+        <div>
+          <label for="noteTitleInput" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">عنوان الملاحظة *</label>
+          <input type="text" id="noteTitleInput" required placeholder="مثال: تجديد سيرفر VPS ومراجعة المشتركين" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="noteCategorySelect" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">التصنيف</label>
+            <select id="noteCategorySelect" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold">
+              <option value="شغل واشتراكات">💼 شغل واشتراكات</option>
+              <option value="مهام عاجلة">🔥 مهام عاجلة</option>
+              <option value="أفكار وتطوير">💡 أفكار وتطوير</option>
+              <option value="شخصي">🏠 شخصي</option>
+            </select>
+          </div>
+          <div>
+            <label for="noteColorSelect" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">لون البطاقة</label>
+            <select id="noteColorSelect" class="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-semibold">
+              <option value="indigo">بنفسجي كلاسيكي</option>
+              <option value="emerald">أخضر زمردي</option>
+              <option value="amber">ذهبي دافئ</option>
+              <option value="sky">أزرق سماوي</option>
+              <option value="rose">وردي بارز</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label for="noteContentInput" class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">محتوى الملاحظة</label>
+          <textarea id="noteContentInput" rows="3" placeholder="اكتب كل التفاصيل أو الملاحظات المهمة هنا..." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+        </div>
+
+        <!-- Interactive Checklist Builder inside Note -->
+        <div class="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-200/80 dark:border-slate-700/70 space-y-2">
+          <label class="block text-xs font-bold text-slate-700 dark:text-slate-300">☑️ مهام فرعية قابلة للشطب (اختياري)</label>
+          <div class="flex gap-2">
+            <input type="text" id="newChecklistText" onkeydown="handleChecklistEnter(event)" placeholder="أضف خطوة أو مهمة فرعية..." class="flex-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            <button type="button" id="btnAddChecklistItem" onclick="addModalChecklistItem()" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition">إضافة</button>
+          </div>
+          <div id="modalChecklistContainer" class="space-y-1.5 pt-1"></div>
+        </div>
+
+        <!-- Optional Note Reminder Alarm -->
+        <div class="bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/50 rounded-2xl p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 text-xs font-extrabold text-indigo-950 dark:text-indigo-200 cursor-pointer">
+              <input type="checkbox" id="noteHasReminder" onchange="toggleNoteReminderBox()" class="rounded text-indigo-600 focus:ring-indigo-500" />
+              <span>🔔 تذكيري بإشعار فوري في موعد محدد</span>
+            </label>
+            <label class="inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+              <input type="checkbox" id="notePinnedCheck" class="rounded text-indigo-600" />
+              <span>📌 تثبيت بالأعلى</span>
+            </label>
+          </div>
+
+          <div id="noteReminderFields" class="hidden space-y-2 pt-1">
+            <input type="datetime-local" id="noteReminderDateTime" class="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 text-sm num-ltr" />
+            <div class="flex flex-wrap gap-1.5">
+              <button type="button" onclick="setQuickNoteDate(1)" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold">بعد دقيقة</button>
+              <button type="button" onclick="setQuickNoteDate(60)" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold">بعد ساعة</button>
+              <button type="button" onclick="setQuickNoteDate(1440)" class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] font-bold">غداً نفس الوقت</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2.5 pt-2">
+          <button type="submit" id="btnSubmitNote" class="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-sm shadow-lg shadow-indigo-600/20 transition">
+            حفظ الملاحظة
+          </button>
+          <button type="button" onclick="closeNoteModal()" class="px-5 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-sm font-bold transition">
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CLIENT REMINDER MESSAGE (WHATSAPP / TELEGRAM) -->
+  <div id="messageModal" class="hidden fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-extrabold text-slate-900 dark:text-white">💬 إرسال رسالة تذكير للمشترك</h3>
+        <button type="button" onclick="closeMessageModal()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center font-bold">✕</button>
+      </div>
+      <textarea id="generatedClientMsg" rows="4" class="w-full p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-emerald-500"></textarea>
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <button type="button" id="btnCopyClientMsg" onclick="copyGeneratedMsg()" class="py-2.5 px-3 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold hover:opacity-90 transition">
+          📋 نسخ النص
+        </button>
+        <a id="linkWhatsappSend" href="https://wa.me/" target="_blank" rel="noopener noreferrer" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold text-center transition">
+          واتساب 📲
+        </a>
+        <a id="linkTelegramSend" href="https://t.me/" target="_blank" rel="noopener noreferrer" class="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold text-center transition">
+          تيليجرام ✈️
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: CONFIRMATION DIALOG -->
+  <div id="confirmModal" class="hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white dark:bg-slate-900 w-full max-w-sm rounded-3xl p-5 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4 text-center">
+      <div class="w-12 h-12 rounded-2xl bg-rose-100 dark:bg-rose-950/70 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto text-xl">⚠️</div>
+      <h3 id="confirmModalTitle" class="text-base font-extrabold text-slate-900 dark:text-white">تأكيد الإجراء</h3>
+      <p id="confirmModalMessage" class="text-xs sm:text-sm text-slate-600 dark:text-slate-300"></p>
+      <div class="grid grid-cols-2 gap-2.5 pt-1">
+        <button type="button" id="btnConfirmYes" onclick="executeConfirmedAction()" class="py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold transition">تأكيد</button>
+        <button type="button" id="btnConfirmNo" onclick="closeConfirmModal()" class="py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold transition">تراجع</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // STATE MANAGEMENT & SAFE STORAGE
+    // =========================================================================
+    const STORAGE_KEY = 'mudakkir_pro_v1_state';
+    const DEFAULT_TEMPLATE = 'أهلاً بك يا {الاسم} 👋\nنود تذكيرك بأن موعد تجديد اشتراك ({الخدمة}) بقيمة {المبلغ} يحل في {الموعد}.\nتواصل معنا لتأكيد التجديد واستمرار الخدمة بدون انقطاع 🌟';
+
+    let currentTab = 'dashboard';
+    let currentSubFilter = 'all';
+    let currentNoteCat = 'all';
+    let chartMode = 'status';
+    let overviewChartInstance = null;
+    let modalChecklistDraft = [];
+    let pendingConfirmCallback = null;
+    let activeAlertItem = null;
+    let alarmRepeatTimer = null;
+    let audioCtx = null;
+
+    function createInitialSampleState() {
+      const now = Date.now();
+      return {
+        settings: {
+          darkMode: false,
+          muted: false,
+          tone: 'crystal',
+          preAlertMinutes: 0,
+          messageTemplate: DEFAULT_TEMPLATE
+        },
+        subscriptions: [
+          {
+            id: 'sub_demo_1',
+            isDemo: true,
+            clientName: 'محمد طارق (مثال تجريبي)',
+            contact: '@m_tarek_vip',
+            serviceName: 'باقة بوت النشر التلقائي VIP',
+            amount: 300,
+            currency: 'ج.م',
+            cycle: 'monthly',
+            paidStatus: 'paid',
+            dueAt: now + 25 * 60 * 1000,
+            alarmEnabled: true,
+            acknowledgedForDue: 0,
+            preAlertSentForDue: 0,
+            notes: 'مشترك في الباقة الشهرية - يفضل الدفع عبر فودافون كاش',
+            renewalsCount: 2
+          },
+          {
+            id: 'sub_demo_2',
+            isDemo: true,
+            clientName: 'سارة عبد الرحمن (مثال تجريبي)',
+            contact: '201098765432',
+            serviceName: 'إدارة قناة واستضافة صور',
+            amount: 450,
+            currency: 'ج.م',
+            cycle: 'monthly',
+            paidStatus: 'unpaid',
+            dueAt: now + 20 * 3600 * 1000,
+            alarmEnabled: true,
+            acknowledgedForDue: 0,
+            preAlertSentForDue: 0,
+            notes: 'بانتظار تحويل رسوم التجديد لهذا الشهر',
+            renewalsCount: 1
+          },
+          {
+            id: 'sub_demo_3',
+            isDemo: true,
+            clientName: 'كريم عادل (مثال تجريبي)',
+            contact: '@karim_store',
+            serviceName: 'سيرفر استضافة Ubuntu مشترك',
+            amount: 600,
+            currency: 'ج.م',
+            cycle: 'quarterly',
+            paidStatus: 'paid',
+            dueAt: now + 12 * 86400 * 1000,
+            alarmEnabled: true,
+            acknowledgedForDue: 0,
+            preAlertSentForDue: 0,
+            notes: 'باقة ربع سنوية شاملة النسخ الاحتياطي',
+            renewalsCount: 4
+          }
+        ],
+        notes: [
+          {
+            id: 'note_demo_1',
+            isDemo: true,
+            title: 'مراجعة مواعيد تجديدات الأسبوع وتجهيز السيرفر (مثال)',
+            category: 'شغل واشتراكات',
+            color: 'emerald',
+            content: 'التأكد من مساحة التخزين على السيرفر ومراجعة المشتركين المنتهية باقاتهم هذا الأسبوع.',
+            pinned: true,
+            hasReminder: true,
+            reminderAt: now + 45 * 60 * 1000,
+            acknowledgedForReminder: 0,
+            preAlertSentForReminder: 0,
+            checklist: [
+              { id: 'chk_1', text: 'فحص حالة البوتات الشغالة 24/7', done: true },
+              { id: 'chk_2', text: 'إرسال رسائل التذكير للمشتركين المستحقين', done: false },
+              { id: 'chk_3', text: 'أخذ نسخة احتياطية من ملف الاشتراكات', done: false }
+            ],
+            updatedAt: now
+          },
+          {
+            id: 'note_demo_2',
+            isDemo: true,
+            title: 'أفكار مميزات جديدة لمشاريعي القادمة (مثال)',
+            category: 'أفكار وتطوير',
+            color: 'indigo',
+            content: 'إضافة لوحة إحصائيات شهرية وتقسيم المشتركين حسب الباقات مع إشعارات تلقائية.',
+            pinned: false,
+            hasReminder: false,
+            reminderAt: 0,
+            acknowledgedForReminder: 0,
+            preAlertSentForReminder: 0,
+            checklist: [],
+            updatedAt: now - 3600000
+          }
+        ],
+        triggeredLog: []
+      };
+    }
+
+    let appState = loadAppState();
+
+    function loadAppState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.subscriptions) && Array.isArray(parsed.notes)) {
+            parsed.settings = Object.assign({
+              darkMode: false,
+              muted: false,
+              tone: 'crystal',
+              preAlertMinutes: 0,
+              messageTemplate: DEFAULT_TEMPLATE
+            }, parsed.settings || {});
+            parsed.triggeredLog = Array.isArray(parsed.triggeredLog) ? parsed.triggeredLog : [];
+            return parsed;
+          }
+        }
+      } catch (e) {
+        // Fallback to in-memory state if storage is restricted
+      }
+      return createInitialSampleState();
+    }
+
+    function saveAppState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+      } catch (e) {
+        // Ignore storage quota or sandbox restrictions
+      }
+      syncWithAndroidNativeBridge();
+    }
+
+    // =========================================================================
+    // ANDROID NATIVE WEBVIEW BRIDGE INTEGRATION
+    // =========================================================================
+    function hasAndroidBridge() {
+      return typeof window.AndroidBridge !== 'undefined' && window.AndroidBridge !== null;
+    }
+
+    function syncWithAndroidNativeBridge() {
+      const statusTextEl = document.getElementById('bridgeStatusText');
+      if (hasAndroidBridge()) {
+        if (statusTextEl) {
+          statusTextEl.textContent = 'متصل بمنبه أندرويد الأصلي (يعمل بالخلفية)';
+        }
+        try {
+          const upcomingAlarms = collectAllUpcomingAlarms();
+          if (typeof window.AndroidBridge.syncAlarmsJson === 'function') {
+            window.AndroidBridge.syncAlarmsJson(JSON.stringify(upcomingAlarms));
+          }
+        } catch (err) {
+          // Safe guard for older Android bridge versions
+        }
+      } else if (statusTextEl) {
+        statusTextEl.textContent = 'نشط ويفحص المواعيد كل ثانية بدقة';
+      }
+    }
+
+    function collectAllUpcomingAlarms() {
+      const list = [];
+      appState.subscriptions.forEach((s) => {
+        if (s.alarmEnabled && s.dueAt) {
+          list.push({
+            id: s.id,
+            kind: 'subscription',
+            title: 'موعد تجديد اشتراك: ' + s.clientName,
+            body: s.serviceName + ' (' + s.amount + ' ' + s.currency + ')',
+            triggerAt: s.dueAt
+          });
+        }
+      });
+      appState.notes.forEach((n) => {
+        if (n.hasReminder && n.reminderAt) {
+          list.push({
+            id: n.id,
+            kind: 'note',
+            title: 'تذكير ملاحظة: ' + n.title,
+            body: n.content || n.category,
+            triggerAt: n.reminderAt
+          });
+        }
+      });
+      return list.sort((a, b) => a.triggerAt - b.triggerAt);
+    }
+
+    // =========================================================================
+    // WEB AUDIO SYNTHESIZED ALARM ENGINE (NO EXTERNAL AUDIO FILES NEEDED)
+    // =========================================================================
+    function ensureAudioContext() {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return null;
+        if (!audioCtx) {
+          audioCtx = new AudioContextClass();
+        }
+        if (audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        return audioCtx;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function playAlarmChime(forceAudible) {
+      if (appState.settings.muted && !forceAudible) return;
+      const ctx = ensureAudioContext();
+      if (!ctx) return;
+
+      const tone = appState.settings.tone || 'crystal';
+      const now = ctx.currentTime;
+
+      const playNote = (freq, startOffset, duration, waveType, peakGain) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = waveType;
+        osc.frequency.setValueAtTime(freq, now + startOffset);
+        gain.gain.setValueAtTime(0.001, now + startOffset);
+        gain.gain.exponentialRampToValueAtTime(peakGain, now + startOffset + 0.03);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + startOffset);
+        osc.stop(now + startOffset + duration + 0.02);
+      };
+
+      if (tone === 'urgent') {
+        playNote(880, 0.0, 0.18, 'triangle', 0.25);
+        playNote(1174.66, 0.2, 0.18, 'triangle', 0.28);
+        playNote(880, 0.42, 0.18, 'triangle', 0.25);
+        playNote(1318.51, 0.64, 0.35, 'triangle', 0.3);
+      } else if (tone === 'digital') {
+        playNote(1046.5, 0.0, 0.1, 'square', 0.12);
+        playNote(1046.5, 0.14, 0.1, 'square', 0.12);
+        playNote(1567.98, 0.3, 0.25, 'square', 0.14);
+      } else {
+        // crystal
+        playNote(587.33, 0.0, 0.25, 'sine', 0.22);
+        playNote(880.0, 0.18, 0.28, 'sine', 0.24);
+        playNote(1174.66, 0.38, 0.45, 'sine', 0.26);
+      }
+    }
+
+    // Unlock audio on first user tap
+    document.addEventListener('pointerdown', () => {
+      ensureAudioContext();
+    }, { once: true });
+
+    // =========================================================================
+    // HELPERS: FORMATTING, DATES & UI TOASTS
+    // =========================================================================
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function toLocalDatetimeInputValue(ts) {
+      const d = new Date(ts);
+      const pad = (n) => String(n).padStart(2, '0');
+      return (
+        d.getFullYear() +
+        '-' + pad(d.getMonth() + 1) +
+        '-' + pad(d.getDate()) +
+        'T' + pad(d.getHours()) +
+        ':' + pad(d.getMinutes())
+      );
+    }
+
+    function formatArabicDateTime(ts) {
+      if (!ts) return 'غير محدد';
+      try {
+        return new Date(ts).toLocaleString('ar-EG', {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      } catch (e) {
+        return new Date(ts).toLocaleString();
+      }
+    }
+
+    function formatLiveCountdown(targetTs) {
+      const diff = targetTs - Date.now();
+      if (diff <= 0) {
+        const lateMins = Math.floor(Math.abs(diff) / 60000);
+        if (lateMins < 1) return { text: 'حان الموعد الآن!', urgent: true, overdue: true };
+        if (lateMins < 60) return { text: 'متأخر منذ ' + lateMins + ' د', urgent: true, overdue: true };
+        const lateHours = Math.floor(lateMins / 60);
+        if (lateHours < 24) return { text: 'متأخر منذ ' + lateHours + ' س', urgent: true, overdue: true };
+        return { text: 'منتهي منذ ' + Math.floor(lateHours / 24) + ' يوم', urgent: true, overdue: true };
+      }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const mins = Math.floor((totalSeconds % 3600) / 60);
+      const secs = totalSeconds % 60;
+      const pad = (n) => String(n).padStart(2, '0');
+
+      if (days > 0) {
+        return {
+          text: `متبقي ${days}ي ${pad(hours)}س ${pad(mins)}د`,
+          urgent: days < 2,
+          overdue: false
+        };
+      }
+      return {
+        text: `متبقي ${pad(hours)}:${pad(mins)}:${pad(secs)}`,
+        urgent: true,
+        overdue: false
+      };
+    }
+
+    function showToast(message, variant) {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const toast = document.createElement('div');
+      const colors =
+        variant === 'error'
+          ? 'bg-rose-600 text-white'
+          : variant === 'warn'
+          ? 'bg-amber-500 text-slate-950'
+          : 'bg-slate-900 dark:bg-emerald-600 text-white';
+
+      toast.className = `pointer-events-auto px-4 py-3 rounded-2xl shadow-xl text-xs sm:text-sm font-bold flex items-center justify-between gap-3 animate-slide-down ${colors}`;
+      toast.innerHTML = `<span>${escapeHtml(message)}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 3200);
+    }
+
+    function copyTextSafe(text, successMsg) {
+      const done = () => showToast(successMsg || 'تم النسخ إلى الحافظة بنجاح ✅', 'success');
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
+      } else {
+        fallbackCopy(text, done);
+      }
+    }
+
+    function fallbackCopy(text, cb) {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      try {
+        document.execCommand('copy');
+        if (cb) cb();
+      } catch (e) {
+        showToast('تعذر النسخ التلقائي، يمكنك تحديد النص ونسخه', 'warn');
+      }
+      document.body.removeChild(ta);
+    }
+
+    // =========================================================================
+    // CONFIRMATION MODAL (REPLACES BLOCKED confirm())
+    // =========================================================================
+    function openConfirmModal(title, message, onConfirm) {
+      document.getElementById('confirmModalTitle').textContent = title;
+      document.getElementById('confirmModalMessage').textContent = message;
+      pendingConfirmCallback = onConfirm;
+      document.getElementById('confirmModal').classList.remove('hidden');
+    }
+
+    function closeConfirmModal() {
+      pendingConfirmCallback = null;
+      document.getElementById('confirmModal').classList.add('hidden');
+    }
+
+    function executeConfirmedAction() {
+      const fn = pendingConfirmCallback;
+      closeConfirmModal();
+      if (typeof fn === 'function') fn();
+    }
+
+    function promptClearDemoItems() {
+      openConfirmModal(
+        'حذف البيانات التجريبية',
+        'سيتم إزالة الأمثلة التجريبية فقط مع الاحتفاظ بأي اشتراكات أو ملاحظات أضفتها بنفسك. هل تريد المتابعة؟',
+        () => {
+          appState.subscriptions = appState.subscriptions.filter((s) => !s.isDemo);
+          appState.notes = appState.notes.filter((n) => !n.isDemo);
+          saveAppState();
+          renderAll();
+          showToast('تم حذف البيانات التجريبية بنجاح ✨');
+        }
+      );
+    }
+
+    // =========================================================================
+    // THEME, SOUND & NAVIGATION
+    // =========================================================================
+    function applyThemeAndSettingsUI() {
+      if (appState.settings.darkMode) {
+        document.documentElement.classList.add('dark');
+        document.getElementById('iconThemeState').textContent = '☀️';
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.getElementById('iconThemeState').textContent = '🌙';
+      }
+      document.getElementById('iconSoundState').textContent = appState.settings.muted ? '🔇' : '🔊';
+      document.getElementById('selectAlarmTone').value = appState.settings.tone || 'crystal';
+      document.getElementById('selectPreAlert').value = String(appState.settings.preAlertMinutes || 0);
+      document.getElementById('textareaMsgTemplate').value = appState.settings.messageTemplate || DEFAULT_TEMPLATE;
+    }
+
+    function toggleThemeMode() {
+      appState.settings.darkMode = !appState.settings.darkMode;
+      saveAppState();
+      applyThemeAndSettingsUI();
+      renderChart();
+    }
+
+    function toggleSoundMute() {
+      appState.settings.muted = !appState.settings.muted;
+      saveAppState();
+      applyThemeAndSettingsUI();
+      showToast(appState.settings.muted ? 'تم كتم صوت التنبيهات 🔇' : 'تم تفعيل صوت التنبيهات 🔊');
+    }
+
+    function updateAlertPreferences() {
+      appState.settings.tone = document.getElementById('selectAlarmTone').value;
+      appState.settings.preAlertMinutes = parseInt(document.getElementById('selectPreAlert').value, 10) || 0;
+      saveAppState();
+      showToast('تم تحديث إعدادات المنبه بنجاح');
+    }
+
+    function saveCustomTemplate() {
+      const val = document.getElementById('textareaMsgTemplate').value.trim();
+      appState.settings.messageTemplate = val || DEFAULT_TEMPLATE;
+      saveAppState();
+      showToast('تم حفظ قالب رسائل المشتركين ✅');
+    }
+
+    function switchTab(tabName) {
+      currentTab = tabName;
+      const views = ['dashboard', 'subscriptions', 'notes', 'alerts', 'settings'];
+      views.forEach((v) => {
+        const el = document.getElementById('view-' + v);
+        if (el) el.classList.toggle('hidden', v !== tabName);
+      });
+
+      document.querySelectorAll('.nav-tab-btn').forEach((btn) => {
+        const active = btn.getAttribute('data-navtab') === tabName;
+        btn.className = active
+          ? 'nav-tab-btn relative flex flex-col items-center justify-center py-1.5 rounded-xl text-emerald-600 dark:text-emerald-400 bg-emerald-50/80 dark:bg-emerald-950/50 font-bold transition'
+          : 'nav-tab-btn relative flex flex-col items-center justify-center py-1.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white font-semibold transition';
+      });
+
+      if (tabName === 'dashboard') renderChart();
+      renderAll();
+    }
+
+    // =========================================================================
+    // INSTANT NOTIFICATION & REAL-TIME ALARM ENGINE
+    // =========================================================================
+    function requestSystemNotificationPermission() {
+      if (hasAndroidBridge() && typeof window.AndroidBridge.requestNotificationPermission === 'function') {
+        try {
+          window.AndroidBridge.requestNotificationPermission();
+          showToast('تم طلب صلاحية إشعارات أندرويد بنجاح 🔔');
+          return;
+        } catch (e) {}
+      }
+      if (!('Notification' in window)) {
+        showToast('التنبيهات الصوتية والمرئية الفورية مفعلة داخل التطبيق 🔔');
+        return;
+      }
+      try {
+        Notification.requestPermission().then((perm) => {
+          if (perm === 'granted') {
+            showToast('تم تفعيل إشعارات النظام بنجاح ✅');
+          } else {
+            showToast('التنبيهات الفورية داخل التطبيق تعمل بكفاءة 🔔');
+          }
+        }).catch(() => {
+          showToast('التنبيهات الفورية داخل التطبيق جاهزة وتعمل تلقائياً 🔔');
+        });
+      } catch (e) {
+        showToast('التنبيهات الفورية داخل التطبيق مفعلة 🔔');
+      }
+    }
+
+    function sendSystemNotification(title, body) {
+      if (hasAndroidBridge() && typeof window.AndroidBridge.triggerImmediateNotification === 'function') {
+        try {
+          window.AndroidBridge.triggerImmediateNotification(title, body);
+        } catch (e) {}
+      }
+      try {
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title, { body });
+        }
+      } catch (e) {
+        // Safe inside sandboxed environments
+      }
+    }
+
+    function scheduleTestAlert() {
+      ensureAudioContext();
+      showToast('سيصلك إشعار فوري تجريبي خلال 3 ثوانٍ... استعد! ⏳');
+      setTimeout(() => {
+        triggerInstantAlertPopup({
+          kind: 'test',
+          id: 'test_alert',
+          badge: 'اختبار حي للإشعار الفوري',
+          title: 'تجربة ناجحة! هكذا يصلك التنبيه في موعده 🔔',
+          lines: [
+            '👤 المشترك: أحمد محمود (تجربة نظام التنبيه)',
+            '📦 الباقة: اشتراك بوت النشر التلقائي VIP — 300 ج.م',
+            '⚡ يعمل هذا الإشعار تلقائياً مع صوت تنبيه وأزرار تجديد أو مراسلة سريعة فور حلول الثانية المحددة!'
+          ]
+        });
+      }, 3000);
+    }
+
+    function triggerInstantAlertPopup(payload) {
+      activeAlertItem = payload;
+      document.getElementById('alertTypeBadge').textContent = payload.badge || 'تنبيه فوري الآن';
+      document.getElementById('alertTitle').textContent = payload.title;
+      document.getElementById('alertTimeStamp').textContent = new Date().toLocaleTimeString('ar-EG', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+
+      const bodyBox = document.getElementById('alertBodyBox');
+      bodyBox.innerHTML = (payload.lines || [])
+        .map((line) => `<p class="leading-relaxed">${escapeHtml(line)}</p>`)
+        .join('');
+
+      const primaryBox = document.getElementById('alertPrimaryActions');
+      if (payload.kind === 'subscription') {
+        primaryBox.innerHTML = `
+          <button type="button" onclick="renewSubFromAlert('${escapeHtml(payload.id)}')" class="py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition">
+            🔄 تجديد الدورة القادمة
+          </button>
+          <button type="button" onclick="messageSubFromAlert('${escapeHtml(payload.id)}')" class="py-2.5 px-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold transition">
+            💬 مراسلة المشترك
+          </button>
+        `;
+      } else if (payload.kind === 'note') {
+        primaryBox.innerHTML = `
+          <button type="button" onclick="completeNoteReminderFromAlert('${escapeHtml(payload.id)}')" class="col-span-2 py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-extrabold transition">
+            ✅ تم الاطلاع وإنجاز التذكير
+          </button>
+        `;
+      } else {
+        primaryBox.innerHTML = `
+          <button type="button" onclick="dismissActiveAlert()" class="col-span-2 py-2.5 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition">
+            ✅ ممتاز، يعمل بكفاءة!
+          </button>
+        `;
+      }
+
+      document.getElementById('urgentAlertOverlay').classList.remove('hidden');
+
+      // Log notification
+      appState.triggeredLog.unshift({
+        id: 'log_' + Date.now(),
+        title: payload.title,
+        kind: payload.kind,
+        firedAt: Date.now()
+      });
+      if (appState.triggeredLog.length > 40) {
+        appState.triggeredLog = appState.triggeredLog.slice(0, 40);
+      }
+      saveAppState();
+      renderAlertsView();
+
+      // Play sound immediately & repeat gently while modal stays open
+      playAlarmChime(false);
+      sendSystemNotification(payload.title, (payload.lines || []).join(' | '));
+      if (alarmRepeatTimer) clearInterval(alarmRepeatTimer);
+      alarmRepeatTimer = setInterval(() => {
+        playAlarmChime(false);
+      }, 4500);
+    }
+
+    function stopAlarmSoundLoop() {
+      if (alarmRepeatTimer) {
+        clearInterval(alarmRepeatTimer);
+        alarmRepeatTimer = null;
+      }
+    }
+
+    function dismissActiveAlert() {
+      stopAlarmSoundLoop();
+      if (activeAlertItem) {
+        if (activeAlertItem.kind === 'subscription') {
+          const sub = appState.subscriptions.find((s) => s.id === activeAlertItem.id);
+          if (sub) sub.acknowledgedForDue = sub.dueAt;
+        } else if (activeAlertItem.kind === 'note') {
+          const note = appState.notes.find((n) => n.id === activeAlertItem.id);
+          if (note) note.acknowledgedForReminder = note.reminderAt;
+        }
+        saveAppState();
+      }
+      activeAlertItem = null;
+      document.getElementById('urgentAlertOverlay').classList.add('hidden');
+      renderAll();
+    }
+
+    function snoozeActiveAlert(minutes) {
+      stopAlarmSoundLoop();
+      const newTarget = Date.now() + minutes * 60 * 1000;
+      if (activeAlertItem) {
+        if (activeAlertItem.kind === 'subscription') {
+          const sub = appState.subscriptions.find((s) => s.id === activeAlertItem.id);
+          if (sub) {
+            sub.dueAt = newTarget;
+            sub.acknowledgedForDue = 0;
+          }
+        } else if (activeAlertItem.kind === 'note') {
+          const note = appState.notes.find((n) => n.id === activeAlertItem.id);
+          if (note) {
+            note.reminderAt = newTarget;
+            note.acknowledgedForReminder = 0;
+          }
+        }
+        saveAppState();
+      }
+      activeAlertItem = null;
+      document.getElementById('urgentAlertOverlay').classList.add('hidden');
+      renderAll();
+      showToast(`تم تأجيل التنبيه لمدة ${minutes} دقيقة ⏰`);
+    }
+
+    function renewSubFromAlert(subId) {
+      dismissActiveAlert();
+      renewSubscriptionCycle(subId);
+    }
+
+    function messageSubFromAlert(subId) {
+      dismissActiveAlert();
+      openMessageModal(subId);
+    }
+
+    function completeNoteReminderFromAlert(noteId) {
+      const note = appState.notes.find((n) => n.id === noteId);
+      if (note) {
+        note.hasReminder = false;
+        note.acknowledgedForReminder = note.reminderAt;
+        saveAppState();
+      }
+      dismissActiveAlert();
+      showToast('تم إتمام التذكير بنجاح ✅');
+    }
+
+    function checkDueAlarmsTick() {
+      const now = Date.now();
+      const clockBadge = document.getElementById('liveClockBadge');
+      if (clockBadge) {
+        clockBadge.textContent = new Date(now).toLocaleTimeString('ar-EG', {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
+      }
+
+      // Update live countdown labels in DOM without full re-render flicker
+      document.querySelectorAll('[data-countdown-ts]').forEach((el) => {
+        const ts = Number(el.getAttribute('data-countdown-ts'));
+        if (!ts) return;
+        const info = formatLiveCountdown(ts);
+        el.textContent = info.text;
+        el.className = info.overdue
+          ? 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300 num-ltr'
+          : info.urgent
+          ? 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 num-ltr'
+          : 'text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 num-ltr';
+      });
+
+      // Do not stack over an already visible alert modal
+      if (activeAlertItem) return;
+
+      const preMins = Number(appState.settings.preAlertMinutes || 0);
+
+      // Check Subscriptions
+      for (const s of appState.subscriptions) {
+        if (!s.alarmEnabled || !s.dueAt) continue;
+
+        if (preMins > 0) {
+          const preTs = s.dueAt - preMins * 60 * 1000;
+          if (now >= preTs && now < s.dueAt && s.preAlertSentForDue !== s.dueAt) {
+            s.preAlertSentForDue = s.dueAt;
+            saveAppState();
+            triggerInstantAlertPopup({
+              kind: 'subscription',
+              id: s.id,
+              badge: 'تنبيه استباقي قبل الموعد',
+              title: `اقترب موعد تجديد: ${s.clientName}`,
+              lines: [
+                `📦 الخدمة: ${s.serviceName}`,
+                `💰 المبلغ المطلوب: ${s.amount} ${s.currency}`,
+                `⏰ الموعد الأساسي: ${formatArabicDateTime(s.dueAt)}`
+              ]
+            });
+            return;
+          }
+        }
+
+        if (now >= s.dueAt && s.acknowledgedForDue !== s.dueAt) {
+          triggerInstantAlertPopup({
+            kind: 'subscription',
+            id: s.id,
+            badge: 'موعد تجديد اشتراك الآن!',
+            title: `حان موعد تجديد اشتراك ${s.clientName}`,
+            lines: [
+              `📦 الباقة / الخدمة: ${s.serviceName}`,
+              `💰 القيمة: ${s.amount} ${s.currency} (${s.paidStatus === 'paid' ? 'مدفوع سابقاً' : 'غير مدفوع'})`,
+              s.contact ? `📱 التواصل: ${s.contact}` : '📱 بدون رقم مسجل'
+            ]
+          });
+          return;
+        }
+      }
+
+      // Check Notes
+      for (const n of appState.notes) {
+        if (!n.hasReminder || !n.reminderAt) continue;
+
+        if (preMins > 0) {
+          const preTs = n.reminderAt - preMins * 60 * 1000;
+          if (now >= preTs && now < n.reminderAt && n.preAlertSentForReminder !== n.reminderAt) {
+            n.preAlertSentForReminder = n.reminderAt;
+            saveAppState();
+            triggerInstantAlertPopup({
+              kind: 'note',
+              id: n.id,
+              badge: 'تذكير مبكر بملاحظة',
+              title: n.title,
+              lines: [
+                `📂 التصنيف: ${n.category}`,
+                n.content ? `📝 ${n.content}` : 'لديك موعد مسجل لهذه الملاحظة قريباً.'
+              ]
+            });
+            return;
+          }
+        }
+
+        if (now >= n.reminderAt && n.acknowledgedForReminder !== n.reminderAt) {
+          triggerInstantAlertPopup({
+            kind: 'note',
+            id: n.id,
+            badge: 'موعد ملاحظة وتذكير فوري',
+            title: n.title,
+            lines: [
+              `📂 التصنيف: ${n.category}`,
+              n.content ? `📝 ${n.content}` : 'حان الموعد المحدد لهذه الملاحظة الآن!'
+            ]
+          });
+          return;
+        }
+      }
+    }
+
+    // =========================================================================
+    // SUBSCRIPTIONS CRUD, RENEWAL & CLIENT MESSAGING
+    // =========================================================================
+    function openSubModal(editId) {
+      const form = document.getElementById('subForm');
+      form.reset();
+      document.getElementById('subEditId').value = editId || '';
+
+      if (editId) {
+        const sub = appState.subscriptions.find((s) => s.id === editId);
+        if (!sub) return;
+        document.getElementById('subModalTitle').textContent = 'تعديل بيانات الاشتراك';
+        document.getElementById('subClientName').value = sub.clientName;
+        document.getElementById('subContact').value = sub.contact || '';
+        document.getElementById('subServiceName').value = sub.serviceName;
+        document.getElementById('subAmount').value = sub.amount;
+        document.getElementById('subCurrency').value = sub.currency || 'ج.م';
+        document.getElementById('subCycle').value = sub.cycle || 'monthly';
+        document.getElementById('subPaidStatus').value = sub.paidStatus || 'paid';
+        document.getElementById('subAlarmEnabled').checked = sub.alarmEnabled !== false;
+        document.getElementById('subDueDateTime').value = toLocalDatetimeInputValue(sub.dueAt);
+        document.getElementById('subNotes').value = sub.notes || '';
+      } else {
+        document.getElementById('subModalTitle').textContent = 'إضافة اشتراك عميل جديد';
+        const nextMonth = Date.now() + 30 * 86400 * 1000;
+        document.getElementById('subDueDateTime').value = toLocalDatetimeInputValue(nextMonth);
+        document.getElementById('subAlarmEnabled').checked = true;
+      }
+
+      document.getElementById('subModal').classList.remove('hidden');
+    }
+
+    function closeSubModal() {
+      document.getElementById('subModal').classList.add('hidden');
+    }
+
+    function setQuickSubDate(offsetMinutes) {
+      const target = Date.now() + offsetMinutes * 60 * 1000;
+      document.getElementById('subDueDateTime').value = toLocalDatetimeInputValue(target);
+    }
+
+    function applyCyclePresetFromSelect() {
+      const editId = document.getElementById('subEditId').value;
+      if (editId) return;
+      const cycle = document.getElementById('subCycle').value;
+      const daysMap = { weekly: 7, monthly: 30, quarterly: 90, yearly: 365 };
+      const days = daysMap[cycle] || 30;
+      document.getElementById('subDueDateTime').value = toLocalDatetimeInputValue(Date.now() + days * 86400 * 1000);
+    }
+
+    function saveSubscriptionForm(e) {
+      e.preventDefault();
+      ensureAudioContext();
+
+      const editId = document.getElementById('subEditId').value;
+      const clientName = document.getElementById('subClientName').value.trim();
+      const contact = document.getElementById('subContact').value.trim();
+      const serviceName = document.getElementById('subServiceName').value.trim();
+      const amount = Math.max(0, parseFloat(document.getElementById('subAmount').value) || 0);
+      const currency = document.getElementById('subCurrency').value;
+      const cycle = document.getElementById('subCycle').value;
+      const paidStatus = document.getElementById('subPaidStatus').value;
+      const alarmEnabled = document.getElementById('subAlarmEnabled').checked;
+      const dueStr = document.getElementById('subDueDateTime').value;
+      const dueAt = dueStr ? new Date(dueStr).getTime() : Date.now() + 86400000;
+      const notes = document.getElementById('subNotes').value.trim();
+
+      if (!clientName || !serviceName || isNaN(dueAt)) {
+        showToast('يرجى استكمال الحقول الأساسية وتحديد موعد صحيح', 'error');
+        return;
+      }
+
+      if (editId) {
+        const idx = appState.subscriptions.findIndex((s) => s.id === editId);
+        if (idx !== -1) {
+          appState.subscriptions[idx] = Object.assign({}, appState.subscriptions[idx], {
+            isDemo: false,
+            clientName,
+            contact,
+            serviceName,
+            amount,
+            currency,
+            cycle,
+            paidStatus,
+            alarmEnabled,
+            dueAt,
+            acknowledgedForDue: 0,
+            preAlertSentForDue: 0,
+            notes
+          });
+        }
+        showToast('تم تحديث بيانات الاشتراك وجدولة التنبيه ✅');
+      } else {
+        appState.subscriptions.unshift({
+          id: 'sub_' + Date.now(),
+          isDemo: false,
+          clientName,
+          contact,
+          serviceName,
+          amount,
+          currency,
+          cycle,
+          paidStatus,
+          alarmEnabled,
+          dueAt,
+          acknowledgedForDue: 0,
+          preAlertSentForDue: 0,
+          notes,
+          renewalsCount: 0
+        });
+        showToast('تمت إضافة المشترك وتفعيل الإشعار الفوري 🔔');
+      }
+
+      saveAppState();
+      closeSubModal();
+      renderAll();
+    }
+
+    function renewSubscriptionCycle(subId) {
+      const sub = appState.subscriptions.find((s) => s.id === subId);
+      if (!sub) return;
+      const daysMap = { weekly: 7, monthly: 30, quarterly: 90, yearly: 365 };
+      const addMs = (daysMap[sub.cycle] || 30) * 86400 * 1000;
+      const baseTime = Math.max(Date.now(), sub.dueAt || Date.now());
+      sub.dueAt = baseTime + addMs;
+      sub.paidStatus = 'paid';
+      sub.isDemo = false;
+      sub.acknowledgedForDue = 0;
+      sub.preAlertSentForDue = 0;
+      sub.renewalsCount = (sub.renewalsCount || 0) + 1;
+      saveAppState();
+      renderAll();
+      showToast(`تم تجديد اشتراك ${sub.clientName} للدورة القادمة بنجاح 🔄`);
+    }
+
+    function toggleSubPaymentStatus(subId) {
+      const sub = appState.subscriptions.find((s) => s.id === subId);
+      if (!sub) return;
+      sub.paidStatus = sub.paidStatus === 'paid' ? 'unpaid' : 'paid';
+      sub.isDemo = false;
+      saveAppState();
+      renderAll();
+      showToast(sub.paidStatus === 'paid' ? 'تم تعليم الاشتراك كمدفوع ✅' : 'تم تغيير الحالة إلى غير مدفوع ⏳');
+    }
+
+    function deleteSubscriptionItem(subId) {
+      const sub = appState.subscriptions.find((s) => s.id === subId);
+      if (!sub) return;
+      openConfirmModal(
+        'حذف الاشتراك',
+        `هل أنت متأكد من حذف اشتراك "${sub.clientName}" نهائياً؟`,
+        () => {
+          appState.subscriptions = appState.subscriptions.filter((s) => s.id !== subId);
+          saveAppState();
+          renderAll();
+          showToast('تم حذف الاشتراك');
+        }
+      );
+    }
+
+    function setSubFilter(filterKey) {
+      currentSubFilter = filterKey;
+      document.querySelectorAll('.sub-filter-pill').forEach((btn) => {
+        const active = btn.getAttribute('data-subfilter') === filterKey;
+        btn.className = active
+          ? 'sub-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-emerald-600 text-white'
+          : 'sub-filter-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
+      });
+      renderSubscriptions();
+    }
+
+    function openMessageModal(subId) {
+      const sub = appState.subscriptions.find((s) => s.id === subId);
+      if (!sub) return;
+      const tpl = appState.settings.messageTemplate || DEFAULT_TEMPLATE;
+      const text = tpl
+        .replace(/\{الاسم\}/g, sub.clientName)
+        .replace(/\{الخدمة\}/g, sub.serviceName)
+        .replace(/\{المبلغ\}/g, sub.amount + ' ' + sub.currency)
+        .replace(/\{الموعد\}/g, formatArabicDateTime(sub.dueAt));
+
+      document.getElementById('generatedClientMsg').value = text;
+
+      const rawContact = (sub.contact || '').trim();
+      const digitsOnly = rawContact.replace(/[^\d]/g, '');
+      const waLink = document.getElementById('linkWhatsappSend');
+      const tgLink = document.getElementById('linkTelegramSend');
+
+      waLink.href = digitsOnly
+        ? `https://wa.me/${digitsOnly}?text=${encodeURIComponent(text)}`
+        : `https://wa.me/?text=${encodeURIComponent(text)}`;
+
+      if (rawContact.startsWith('@')) {
+        tgLink.href = `https://t.me/${rawContact.slice(1)}?text=${encodeURIComponent(text)}`;
+      } else {
+        tgLink.href = `https://t.me/share/url?url=${encodeURIComponent('تذكير اشتراك')}&text=${encodeURIComponent(text)}`;
+      }
+
+      document.getElementById('messageModal').classList.remove('hidden');
+    }
+
+    function closeMessageModal() {
+      document.getElementById('messageModal').classList.add('hidden');
+    }
+
+    function copyGeneratedMsg() {
+      const text = document.getElementById('generatedClientMsg').value;
+      copyTextSafe(text, 'تم نسخ رسالة التذكير جاهزة للإرسال 📋');
+    }
+
+    // =========================================================================
+    // NOTES & CHECKLISTS CRUD
+    // =========================================================================
+    function openNoteModal(editId) {
+      document.getElementById('noteForm').reset();
+      document.getElementById('noteEditId').value = editId || '';
+      modalChecklistDraft = [];
+
+      if (editId) {
+        const note = appState.notes.find((n) => n.id === editId);
+        if (!note) return;
+        document.getElementById('noteModalTitle').textContent = 'تعديل الملاحظة';
+        document.getElementById('noteTitleInput').value = note.title;
+        document.getElementById('noteCategorySelect').value = note.category || 'شغل واشتراكات';
+        document.getElementById('noteColorSelect').value = note.color || 'indigo';
+        document.getElementById('noteContentInput').value = note.content || '';
+        document.getElementById('notePinnedCheck').checked = Boolean(note.pinned);
+        document.getElementById('noteHasReminder').checked = Boolean(note.hasReminder);
+        document.getElementById('noteReminderDateTime').value = toLocalDatetimeInputValue(
+          note.reminderAt || Date.now() + 3600000
+        );
+        modalChecklistDraft = (note.checklist || []).map((item) => Object.assign({}, item));
+      } else {
+        document.getElementById('noteModalTitle').textContent = 'كتابة ملاحظة أو مهمة جديدة';
+        document.getElementById('noteHasReminder').checked = false;
+        document.getElementById('noteReminderDateTime').value = toLocalDatetimeInputValue(Date.now() + 3600000);
+      }
+
+      toggleNoteReminderBox();
+      renderModalChecklistDraft();
+      document.getElementById('noteModal').classList.remove('hidden');
+    }
+
+    function closeNoteModal() {
+      document.getElementById('noteModal').classList.add('hidden');
+    }
+
+    function toggleNoteReminderBox() {
+      const checked = document.getElementById('noteHasReminder').checked;
+      document.getElementById('noteReminderFields').classList.toggle('hidden', !checked);
+    }
+
+    function setQuickNoteDate(offsetMinutes) {
+      document.getElementById('noteHasReminder').checked = true;
+      toggleNoteReminderBox();
+      document.getElementById('noteReminderDateTime').value = toLocalDatetimeInputValue(
+        Date.now() + offsetMinutes * 60 * 1000
+      );
+    }
+
+    function handleChecklistEnter(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addModalChecklistItem();
+      }
+    }
+
+    function addModalChecklistItem() {
+      const input = document.getElementById('newChecklistText');
+      const text = input.value.trim();
+      if (!text) return;
+      modalChecklistDraft.push({
+        id: 'chk_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        text,
+        done: false
+      });
+      input.value = '';
+      renderModalChecklistDraft();
+    }
+
+    function removeModalChecklistItem(chkId) {
+      modalChecklistDraft = modalChecklistDraft.filter((c) => c.id !== chkId);
+      renderModalChecklistDraft();
+    }
+
+    function renderModalChecklistDraft() {
+      const container = document.getElementById('modalChecklistContainer');
+      if (!modalChecklistDraft.length) {
+        container.innerHTML = '<p class="text-[11px] text-slate-400">لا توجد مهام فرعية مضافة حالياً.</p>';
+        return;
+      }
+      container.innerHTML = modalChecklistDraft
+        .map(
+          (c) => `
+          <div class="flex items-center justify-between gap-2 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200/70 dark:border-slate-700 text-xs">
+            <span class="truncate">${escapeHtml(c.text)}</span>
+            <button type="button" onclick="removeModalChecklistItem('${escapeHtml(c.id)}')" class="text-rose-500 font-bold px-1">✕</button>
+          </div>`
+        )
+        .join('');
+    }
+
+    function saveNoteForm(e) {
+      e.preventDefault();
+      ensureAudioContext();
+
+      const editId = document.getElementById('noteEditId').value;
+      const title = document.getElementById('noteTitleInput').value.trim();
+      const category = document.getElementById('noteCategorySelect').value;
+      const color = document.getElementById('noteColorSelect').value;
+      const content = document.getElementById('noteContentInput').value.trim();
+      const pinned = document.getElementById('notePinnedCheck').checked;
+      const hasReminder = document.getElementById('noteHasReminder').checked;
+      const remVal = document.getElementById('noteReminderDateTime').value;
+      const reminderAt = hasReminder && remVal ? new Date(remVal).getTime() : 0;
+
+      if (!title) {
+        showToast('يرجى كتابة عنوان الملاحظة', 'error');
+        return;
+      }
+
+      if (editId) {
+        const idx = appState.notes.findIndex((n) => n.id === editId);
+        if (idx !== -1) {
+          appState.notes[idx] = Object.assign({}, appState.notes[idx], {
+            isDemo: false,
+            title,
+            category,
+            color,
+            content,
+            pinned,
+            hasReminder,
+            reminderAt,
+            acknowledgedForReminder: 0,
+            preAlertSentForReminder: 0,
+            checklist: modalChecklistDraft,
+            updatedAt: Date.now()
+          });
+        }
+        showToast('تم حفظ تعديلات الملاحظة ✅');
+      } else {
+        appState.notes.unshift({
+          id: 'note_' + Date.now(),
+          isDemo: false,
+          title,
+          category,
+          color,
+          content,
+          pinned,
+          hasReminder,
+          reminderAt,
+          acknowledgedForReminder: 0,
+          preAlertSentForReminder: 0,
+          checklist: modalChecklistDraft,
+          updatedAt: Date.now()
+        });
+        showToast(hasReminder ? 'تم حفظ الملاحظة وجدولة التنبيه الفوري 🔔' : 'تمت إضافة الملاحظة بنجاح 📝');
+      }
+
+      saveAppState();
+      closeNoteModal();
+      renderAll();
+    }
+
+    function toggleNotePin(noteId) {
+      const note = appState.notes.find((n) => n.id === noteId);
+      if (!note) return;
+      note.pinned = !note.pinned;
+      saveAppState();
+      renderAll();
+      showToast(note.pinned ? 'تم تثبيت الملاحظة في الأعلى 📌' : 'تم إلغاء تثبيت الملاحظة');
+    }
+
+    function toggleNoteChecklistItem(noteId, chkId) {
+      const note = appState.notes.find((n) => n.id === noteId);
+      if (!note || !Array.isArray(note.checklist)) return;
+      const item = note.checklist.find((c) => c.id === chkId);
+      if (!item) return;
+      item.done = !item.done;
+      note.isDemo = false;
+      saveAppState();
+      renderNotes();
+    }
+
+    function deleteNoteItem(noteId) {
+      const note = appState.notes.find((n) => n.id === noteId);
+      if (!note) return;
+      openConfirmModal('حذف الملاحظة', `هل تريد حذف ملاحظة "${note.title}"؟`, () => {
+        appState.notes = appState.notes.filter((n) => n.id !== noteId);
+        saveAppState();
+        renderAll();
+        showToast('تم حذف الملاحظة');
+      });
+    }
+
+    function setNoteCategoryFilter(cat) {
+      currentNoteCat = cat;
+      document.querySelectorAll('.note-cat-pill').forEach((btn) => {
+        const active = btn.getAttribute('data-notecat') === cat;
+        btn.className = active
+          ? 'note-cat-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-indigo-600 text-white'
+          : 'note-cat-pill px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300';
+      });
+      renderNotes();
+    }
+
+    // =========================================================================
+    // BACKUP EXPORT / IMPORT (JSON & EXCEL CSV)
+    // =========================================================================
+    function triggerFileDownload(filename, content, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    function exportBackupJson() {
+      const dateTag = new Date().toISOString().slice(0, 10);
+      const jsonStr = JSON.stringify(appState, null, 2);
+      triggerFileDownload(`mudakkir_backup_${dateTag}.json`, jsonStr, 'application/json;charset=utf-8');
+      showToast('تم تحميل ملف النسخة الاحتياطية (JSON) بنجاح 📥');
+    }
+
+    function importBackupJson(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const imported = JSON.parse(String(ev.target.result || '{}'));
+          if (!Array.isArray(imported.subscriptions) || !Array.isArray(imported.notes)) {
+            showToast('ملف النسخة الاحتياطية غير صالح', 'error');
+            return;
+          }
+          appState = imported;
+          appState.settings = Object.assign({
+            darkMode: false,
+            muted: false,
+            tone: 'crystal',
+            preAlertMinutes: 0,
+            messageTemplate: DEFAULT_TEMPLATE
+          }, appState.settings || {});
+          appState.triggeredLog = Array.isArray(appState.triggeredLog) ? appState.triggeredLog : [];
+          saveAppState();
+          applyThemeAndSettingsUI();
+          renderAll();
+          showToast('تمت استعادة كافة الاشتراكات والملاحظات بنجاح 🎉');
+        } catch (err) {
+          showToast('تعذر قراءة ملف JSON المرفوع', 'error');
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    function exportSubscribersCsv() {
+      const headers = ['اسم المشترك', 'وسيلة التواصل', 'الخدمة / الباقة', 'القيمة', 'العملة', 'الدورة', 'حالة الدفع', 'موعد التجديد', 'ملاحظات'];
+      const cycleAr = { weekly: 'أسبوعي', monthly: 'شهري', quarterly: 'ربع سنوي', yearly: 'سنوي' };
+      const rows = appState.subscriptions.map((s) => [
+        s.clientName,
+        s.contact || '',
+        s.serviceName,
+        s.amount,
+        s.currency,
+        cycleAr[s.cycle] || s.cycle,
+        s.paidStatus === 'paid' ? 'مدفوع' : 'غير مدفوع',
+        formatArabicDateTime(s.dueAt),
+        (s.notes || '').replace(/\n/g, ' ')
+      ]);
+
+      const csvLines = [headers, ...rows].map((row) =>
+        row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')
+      );
+      // UTF-8 BOM so Excel renders Arabic cleanly
+      const bomCsv = '\uFEFF' + csvLines.join('\r\n');
+      const dateTag = new Date().toISOString().slice(0, 10);
+      triggerFileDownload(`subscribers_${dateTag}.csv`, bomCsv, 'text/csv;charset=utf-8');
+      showToast('تم تصدير جدول المشتركين بصيغة CSV لإكسل 📊');
+    }
+
+    function clearNotificationLog() {
+      appState.triggeredLog = [];
+      saveAppState();
+      renderAlertsView();
+      showToast('تم مسح سجل الإشعارات السابقة');
+    }
+
+    // =========================================================================
+    // RENDERING VIEWS & CHARTS
+    // =========================================================================
+    function getMonthlyNormalizedAmount(sub) {
+      const val = Number(sub.amount) || 0;
+      if (sub.cycle === 'weekly') return val * 4.33;
+      if (sub.cycle === 'quarterly') return val / 3;
+      if (sub.cycle === 'yearly') return val / 12;
+      return val;
+    }
+
+    function renderDashboard() {
+      const now = Date.now();
+      const soonThreshold = 48 * 3600 * 1000;
+      const totalSubs = appState.subscriptions.length;
+      const urgentSubs = appState.subscriptions.filter((s) => s.dueAt - now <= soonThreshold);
+      const activeSubs = appState.subscriptions.filter((s) => s.dueAt > now);
+      const unpaidSubs = appState.subscriptions.filter((s) => s.paidStatus !== 'paid');
+
+      let monthlyExpected = 0;
+      let monthlyCollected = 0;
+      appState.subscriptions.forEach((s) => {
+        const norm = getMonthlyNormalizedAmount(s);
+        monthlyExpected += norm;
+        if (s.paidStatus === 'paid') monthlyCollected += norm;
+      });
+
+      const pinnedNotes = appState.notes.filter((n) => n.pinned).length;
+      const activeNoteAlarms = appState.notes.filter((n) => n.hasReminder && n.reminderAt > 0).length;
+
+      document.getElementById('kpiActiveSubs').textContent = String(activeSubs.length);
+      document.getElementById('kpiTotalSubsSubtext').textContent = `من إجمالي ${totalSubs} مشترك`;
+      document.getElementById('kpiUrgentCount').textContent = String(urgentSubs.length);
+      document.getElementById('kpiUnpaidSubtext').textContent = `${unpaidSubs.length} اشتراك غير مدفوع`;
+      document.getElementById('kpiMonthlyRev').textContent = `${Math.round(monthlyExpected).toLocaleString('ar-EG')} ج.م`;
+      document.getElementById('kpiCollectedSubtext').textContent = `محصّل فعلياً: ${Math.round(monthlyCollected).toLocaleString('ar-EG')} ج.م`;
+      document.getElementById('kpiNotesCount').textContent = String(appState.notes.length);
+      document.getElementById('kpiPinnedSubtext').textContent = `${pinnedNotes} مثبتة • ${activeNoteAlarms} منبه نشط`;
+
+      // Nav badge for urgent subscriptions
+      const navBadge = document.getElementById('navBadgeSubs');
+      if (urgentSubs.length > 0) {
+        navBadge.textContent = String(urgentSubs.length);
+        navBadge.classList.remove('hidden');
+      } else {
+        navBadge.classList.add('hidden');
+      }
+
+      // Demo banner visibility
+      const hasDemo =
+        appState.subscriptions.some((s) => s.isDemo) || appState.notes.some((n) => n.isDemo);
+      document.getElementById('demoBanner').classList.toggle('hidden', !hasDemo);
+
+      // Upcoming combined feed
+      const upcomingItems = collectAllUpcomingAlarms().slice(0, 5);
+      const feedContainer = document.getElementById('upcomingFeedList');
+
+      if (!upcomingItems.length) {
+        feedContainer.innerHTML = `
+          <div class="text-center py-8 text-slate-400 text-xs space-y-2">
+            <div class="text-3xl">🎉</div>
+            <p class="font-bold">لا توجد مواعيد معلقة حالياً — أضف اشتراكاً أو ملاحظة بمنبه لتظهر هنا.</p>
+          </div>`;
+      } else {
+        feedContainer.innerHTML = upcomingItems
+          .map((item) => {
+            const cd = formatLiveCountdown(item.triggerAt);
+            const isSub = item.kind === 'subscription';
+            return `
+              <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700/60 flex items-center justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-1.5">
+                    <span class="text-sm">${isSub ? '👤' : '📝'}</span>
+                    <h4 class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white truncate">${escapeHtml(item.title)}</h4>
+                  </div>
+                  <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">${escapeHtml(item.body)} • ${escapeHtml(formatArabicDateTime(item.triggerAt))}</p>
+                </div>
+                <div class="flex items-center gap-1.5 shrink-0">
+                  <span data-countdown-ts="${item.triggerAt}" class="${
+                    cd.overdue
+                      ? 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300 num-ltr'
+                      : cd.urgent
+                      ? 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 num-ltr'
+                      : 'text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 num-ltr'
+                  }">${escapeHtml(cd.text)}</span>
+                  ${
+                    isSub
+                      ? `<button type="button" onclick="openMessageModal('${escapeHtml(item.id)}')" class="p-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs" title="مراسلة المشترك">💬</button>`
+                      : `<button type="button" onclick="openNoteModal('${escapeHtml(item.id)}')" class="p-1.5 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-xs" title="فتح الملاحظة">✏️</button>`
+                  }
+                </div>
+              </div>
+            `;
+          })
+          .join('');
+      }
+    }
+
+    function setChartMode(mode) {
+      chartMode = mode;
+      const statusBtn = document.getElementById('btnChartModeStatus');
+      const serviceBtn = document.getElementById('btnChartModeService');
+      if (mode === 'status') {
+        statusBtn.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm transition';
+        serviceBtn.className = 'px-2.5 py-1 rounded-lg text-slate-600 dark:text-slate-300 transition';
+      } else {
+        serviceBtn.className = 'px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm transition';
+        statusBtn.className = 'px-2.5 py-1 rounded-lg text-slate-600 dark:text-slate-300 transition';
+      }
+      renderChart();
+    }
+
+    function renderChart() {
+      const canvas = document.getElementById('overviewChart');
+      if (!canvas || typeof Chart === 'undefined') return;
+      if (overviewChartInstance) {
+        overviewChartInstance.destroy();
+        overviewChartInstance = null;
+      }
+
+      const isDark = appState.settings.darkMode;
+      const textColor = isDark ? '#cbd5e1' : '#475569';
+      const now = Date.now();
+      const soonMs = 48 * 3600 * 1000;
+
+      if (chartMode === 'status') {
+        let activeHealthy = 0;
+        let dueSoon = 0;
+        let overdue = 0;
+
+        appState.subscriptions.forEach((s) => {
+          const diff = s.dueAt - now;
+          if (diff <= 0) overdue++;
+          else if (diff <= soonMs) dueSoon++;
+          else activeHealthy++;
+        });
+
+        const total = activeHealthy + dueSoon + overdue;
+        overviewChartInstance = new Chart(canvas, {
+          type: 'doughnut',
+          data: {
+            labels: total ? ['نشط ومستقر', 'ينتهي خلال 48 ساعة', 'منتهي / مستحق الآن'] : ['لا توجد اشتراكات بعد'],
+            datasets: [
+              {
+                data: total ? [activeHealthy, dueSoon, overdue] : [1],
+                backgroundColor: total ? ['#10b981', '#f59e0b', '#ef4444'] : ['#94a3b8'],
+                borderWidth: 0
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '66%',
+            plugins: {
+              legend: {
+                position: 'bottom',
+                labels: { color: textColor, font: { family: 'Cairo', weight: 'bold', size: 11 } }
+              }
+            }
+          }
+        });
+      } else {
+        const serviceTotals = {};
+        appState.subscriptions.forEach((s) => {
+          const key = (s.serviceName || 'أخرى').slice(0, 20);
+          serviceTotals[key] = (serviceTotals[key] || 0) + getMonthlyNormalizedAmount(s);
+        });
+        const labels = Object.keys(serviceTotals);
+        const values = labels.map((k) => Math.round(serviceTotals[k]));
+
+        overviewChartInstance = new Chart(canvas, {
+          type: 'bar',
+          data: {
+            labels: labels.length ? labels : ['لا توجد بيانات'],
+            datasets: [
+              {
+                label: 'الدخل الشهري (ج.م)',
+                data: values.length ? values : [0],
+                backgroundColor: '#10b981',
+                borderRadius: 8
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              x: { ticks: { color: textColor, font: { family: 'Cairo', size: 10 } }, grid: { display: false } },
+              y: { ticks: { color: textColor }, beginAtZero: true }
+            }
+          }
+        });
+      }
+    }
+
+    function renderSubscriptions() {
+      const container = document.getElementById('subscriptionsGrid');
+      const query = (document.getElementById('subSearchInput').value || '').trim().toLowerCase();
+      const sortBy = document.getElementById('subSortSelect').value;
+      const now = Date.now();
+      const soonMs = 48 * 3600 * 1000;
+
+      let list = appState.subscriptions.filter((s) => {
+        if (query) {
+          const hay = `${s.clientName} ${s.contact || ''} ${s.serviceName} ${s.notes || ''}`.toLowerCase();
+          if (!hay.includes(query)) return false;
+        }
+        if (currentSubFilter === 'urgent') return s.dueAt - now <= soonMs;
+        if (currentSubFilter === 'active') return s.dueAt > now;
+        if (currentSubFilter === 'unpaid') return s.paidStatus !== 'paid';
+        return true;
+      });
+
+      list.sort((a, b) => {
+        if (sortBy === 'amount_desc') return (b.amount || 0) - (a.amount || 0);
+        if (sortBy === 'name_asc') return a.clientName.localeCompare(b.clientName, 'ar');
+        return a.dueAt - b.dueAt;
+      });
+
+      if (!list.length) {
+        container.innerHTML = `
+          <div class="md:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-8 text-center border border-slate-200/80 dark:border-slate-800">
+            <div class="text-3xl mb-2">👥</div>
+            <h3 class="text-sm font-extrabold text-slate-800 dark:text-slate-100">لا توجد اشتراكات مطابقة للبحث</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">اضغط على "+ إضافة اشتراك عميل" لتسجيل مشترك جديد مع منبه تلقائي.</p>
+          </div>`;
+        return;
+      }
+
+      const cycleLabels = {
+        weekly: 'أسبوعي',
+        monthly: 'شهري',
+        quarterly: 'ربع سنوي',
+        yearly: 'سنوي'
+      };
+
+      container.innerHTML = list
+        .map((s) => {
+          const cd = formatLiveCountdown(s.dueAt);
+          const isPaid = s.paidStatus === 'paid';
+          return `
+            <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border ${
+              cd.overdue
+                ? 'border-rose-300 dark:border-rose-800'
+                : cd.urgent
+                ? 'border-amber-300 dark:border-amber-800'
+                : 'border-slate-200/80 dark:border-slate-800'
+            } shadow-sm flex flex-col justify-between gap-3">
+              <div class="space-y-2.5">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <h3 class="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white truncate">${escapeHtml(s.clientName)}</h3>
+                    <p class="text-xs font-bold text-emerald-700 dark:text-emerald-400 truncate">${escapeHtml(s.serviceName)}</p>
+                  </div>
+                  <span data-countdown-ts="${s.dueAt}" class="${
+                    cd.overdue
+                      ? 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300 num-ltr'
+                      : cd.urgent
+                      ? 'text-[11px] font-extrabold px-2.5 py-0.5 rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300 num-ltr'
+                      : 'text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 num-ltr'
+                  }">${escapeHtml(cd.text)}</span>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 font-extrabold text-slate-800 dark:text-slate-200">${escapeHtml(s.amount)} ${escapeHtml(s.currency)} • ${escapeHtml(cycleLabels[s.cycle] || 'شهري')}</span>
+                  <button type="button" onclick="toggleSubPaymentStatus('${escapeHtml(s.id)}')" class="px-2.5 py-1 rounded-lg font-bold ${
+                    isPaid
+                      ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300'
+                      : 'bg-rose-100 text-rose-800 dark:bg-rose-950/70 dark:text-rose-300'
+                  }">${isPaid ? '✅ مدفوع' : '⏳ غير مدفوع'}</button>
+                  ${
+                    s.contact
+                      ? `<span class="px-2.5 py-1 rounded-lg bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 font-semibold num-ltr">${escapeHtml(s.contact)}</span>`
+                      : ''
+                  }
+                </div>
+
+                <div class="text-xs text-slate-500 dark:text-slate-400 flex items-center justify-between">
+                  <span>📅 الموعد: ${escapeHtml(formatArabicDateTime(s.dueAt))}</span>
+                  <span>${s.alarmEnabled ? '🔔 المنبه مفعل' : '🔕 صامت'}</span>
+                </div>
+
+                ${
+                  s.notes
+                    ? `<p class="text-xs bg-slate-50 dark:bg-slate-800/60 p-2.5 rounded-xl text-slate-600 dark:text-slate-300">${escapeHtml(s.notes)}</p>`
+                    : ''
+                }
+              </div>
+
+              <div class="grid grid-cols-4 gap-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onclick="renewSubscriptionCycle('${escapeHtml(s.id)}')" class="col-span-2 py-2 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition">
+                  🔄 تجديد دورة
+                </button>
+                <button type="button" onclick="openMessageModal('${escapeHtml(s.id)}')" class="py-2 px-2 rounded-xl bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900 text-sky-700 dark:text-sky-300 text-xs font-bold transition" title="رسالة تذكير">
+                  💬 تذكير
+                </button>
+                <div class="flex gap-1">
+                  <button type="button" onclick="openSubModal('${escapeHtml(s.id)}')" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs" title="تعديل">✏️</button>
+                  <button type="button" onclick="deleteSubscriptionItem('${escapeHtml(s.id)}')" class="flex-1 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 text-xs" title="حذف">🗑️</button>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    function renderNotes() {
+      const container = document.getElementById('notesGrid');
+      const query = (document.getElementById('noteSearchInput').value || '').trim().toLowerCase();
+
+      const colorBorderMap = {
+        indigo: 'border-t-4 border-t-indigo-500',
+        emerald: 'border-t-4 border-t-emerald-500',
+        amber: 'border-t-4 border-t-amber-500',
+        sky: 'border-t-4 border-t-sky-500',
+        rose: 'border-t-4 border-t-rose-500'
+      };
+
+      const filtered = appState.notes
+        .filter((n) => {
+          if (query) {
+            const chkText = (n.checklist || []).map((c) => c.text).join(' ');
+            const hay = `${n.title} ${n.content || ''} ${n.category || ''} ${chkText}`.toLowerCase();
+            if (!hay.includes(query)) return false;
+          }
+          if (currentNoteCat === 'pinned') return Boolean(n.pinned);
+          if (currentNoteCat !== 'all') return n.category === currentNoteCat;
+          return true;
+        })
+        .sort((a, b) => {
+          if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
+          return (b.updatedAt || 0) - (a.updatedAt || 0);
+        });
+
+      if (!filtered.length) {
+        container.innerHTML = `
+          <div class="md:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-8 text-center border border-slate-200/80 dark:border-slate-800">
+            <div class="text-3xl mb-2">📝</div>
+            <h3 class="text-sm font-extrabold text-slate-800 dark:text-slate-100">لا توجد ملاحظات مطابقة</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">سجّل أفكارك، حساباتك، أو مهامك اليومية مع إمكانية ضبط منبه فوري لأي ملاحظة.</p>
+          </div>`;
+        return;
+      }
+
+      container.innerHTML = filtered
+        .map((n) => {
+          const topAccent = colorBorderMap[n.color] || colorBorderMap.indigo;
+          const totalTasks = (n.checklist || []).length;
+          const doneTasks = (n.checklist || []).filter((c) => c.done).length;
+          const pct = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+          const cd = n.hasReminder && n.reminderAt ? formatLiveCountdown(n.reminderAt) : null;
+
+          return `
+            <div class="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 ${topAccent} shadow-sm flex flex-col justify-between gap-3">
+              <div class="space-y-2.5">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <span class="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">${escapeHtml(n.category)}</span>
+                    <h3 class="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white mt-1.5">${escapeHtml(n.title)}</h3>
+                  </div>
+                  <button type="button" onclick="toggleNotePin('${escapeHtml(n.id)}')" class="p-1.5 rounded-xl ${
+                    n.pinned ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-700' : 'bg-slate-100 dark:bg-slate-800 opacity-60 hover:opacity-100'
+                  }" title="تثبيت الملاحظة">📌</button>
+                </div>
+
+                ${
+                  n.content
+                    ? `<p class="text-xs sm:text-sm text-slate-600 dark:text-slate-300 whitespace-pre-line leading-relaxed">${escapeHtml(n.content)}</p>`
+                    : ''
+                }
+
+                ${
+                  totalTasks > 0
+                    ? `
+                  <div class="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 space-y-2">
+                    <div class="flex items-center justify-between text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                      <span>المهام الفرعية (${doneTasks}/${totalTasks})</span>
+                      <span class="num-ltr">${pct}%</span>
+                    </div>
+                    <div class="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                      <div class="h-full bg-indigo-500 transition-all" style="width:${pct}%"></div>
+                    </div>
+                    <div class="space-y-1.5 pt-1">
+                      ${n.checklist
+                        .map(
+                          (c) => `
+                        <label class="flex items-center gap-2 text-xs cursor-pointer select-none">
+                          <input type="checkbox" ${c.done ? 'checked' : ''} onchange="toggleNoteChecklistItem('${escapeHtml(n.id)}', '${escapeHtml(c.id)}')" class="rounded text-indigo-600" />
+                          <span class="${c.done ? 'line-through text-slate-400' : 'text-slate-700 dark:text-slate-200'}">${escapeHtml(c.text)}</span>
+                        </label>`
+                        )
+                        .join('')}
+                    </div>
+                  </div>`
+                    : ''
+                }
+
+                ${
+                  cd
+                    ? `
+                  <div class="flex items-center justify-between pt-1 text-xs">
+                    <span class="text-indigo-600 dark:text-indigo-400 font-bold">🔔 ${escapeHtml(formatArabicDateTime(n.reminderAt))}</span>
+                    <span data-countdown-ts="${n.reminderAt}" class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 num-ltr">${escapeHtml(cd.text)}</span>
+                  </div>`
+                    : ''
+                }
+              </div>
+
+              <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" onclick="copyNoteFullText('${escapeHtml(n.id)}')" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-xs font-bold transition">📋 نسخ</button>
+                <div class="flex items-center gap-1.5">
+                  <button type="button" onclick="openNoteModal('${escapeHtml(n.id)}')" class="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition">✏️ تعديل</button>
+                  <button type="button" onclick="deleteNoteItem('${escapeHtml(n.id)}')" class="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 text-xs font-bold transition">🗑️ حذف</button>
+                </div>
+              </div>
+            </div>
+          `;
+        })
+        .join('');
+    }
+
+    function copyNoteFullText(noteId) {
+      const note = appState.notes.find((n) => n.id === noteId);
+      if (!note) return;
+      const tasks = (note.checklist || []).map((c) => `${c.done ? '[x]' : '[ ]'} ${c.text}`).join('\n');
+      const full = `${note.title}\n${note.content || ''}${tasks ? '\n' + tasks : ''}`.trim();
+      copyTextSafe(full, 'تم نسخ الملاحظة بالكامل 📋');
+    }
+
+    function renderAlertsView() {
+      const scheduledEl = document.getElementById('scheduledAlarmsList');
+      const logEl = document.getElementById('triggeredLogList');
+      const alarms = collectAllUpcomingAlarms();
+
+      if (!alarms.length) {
+        scheduledEl.innerHTML = '<p class="text-xs text-slate-400 py-4 text-center">لا توجد منبهات مجدولة حالياً.</p>';
+      } else {
+        scheduledEl.innerHTML = alarms
+          .map((a) => {
+            const cd = formatLiveCountdown(a.triggerAt);
+            return `
+              <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 flex items-center justify-between gap-2">
+                <div class="min-w-0">
+                  <div class="text-xs font-extrabold text-slate-900 dark:text-white truncate">${escapeHtml(a.title)}</div>
+                  <div class="text-[11px] text-slate-500 dark:text-slate-400">${escapeHtml(formatArabicDateTime(a.triggerAt))}</div>
+                </div>
+                <span data-countdown-ts="${a.triggerAt}" class="text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 num-ltr shrink-0">${escapeHtml(cd.text)}</span>
+              </div>`;
+          })
+          .join('');
+      }
+
+      if (!appState.triggeredLog.length) {
+        logEl.innerHTML = '<p class="text-xs text-slate-400 py-4 text-center">لم تنطلق أي إشعارات بعد. اضغط "تجربة الإشعار" بالأعلى لاختبار التنبيه الفوري!</p>';
+      } else {
+        logEl.innerHTML = appState.triggeredLog
+          .map(
+            (item) => `
+            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 flex items-center justify-between gap-2 text-xs">
+              <span class="font-bold truncate">🔔 ${escapeHtml(item.title)}</span>
+              <span class="text-[11px] text-slate-400 shrink-0 num-ltr">${escapeHtml(formatArabicDateTime(item.firedAt))}</span>
+            </div>`
+          )
+          .join('');
+      }
+    }
+
+    function renderAll() {
+      renderDashboard();
+      renderSubscriptions();
+      renderNotes();
+      renderAlertsView();
+      if (currentTab === 'dashboard') {
+        renderChart();
+      }
+    }
+
+    // Expose inline handlers explicitly on window
+    Object.assign(window, {
+      snoozeActiveAlert,
+      dismissActiveAlert,
+      scheduleTestAlert,
+      toggleSoundMute,
+      toggleThemeMode,
+      promptClearDemoItems,
+      openSubModal,
+      closeSubModal,
+      openNoteModal,
+      closeNoteModal,
+      switchTab,
+      setChartMode,
+      renderSubscriptions,
+      setSubFilter,
+      renderNotes,
+      setNoteCategoryFilter,
+      requestSystemNotificationPermission,
+      updateAlertPreferences,
+      playAlarmChime,
+      clearNotificationLog,
+      exportBackupJson,
+      importBackupJson,
+      exportSubscribersCsv,
+      saveCustomTemplate,
+      saveSubscriptionForm,
+      applyCyclePresetFromSelect,
+      setQuickSubDate,
+      saveNoteForm,
+      handleChecklistEnter,
+      addModalChecklistItem,
+      removeModalChecklistItem,
+      toggleNoteReminderBox,
+      setQuickNoteDate,
+      closeMessageModal,
+      copyGeneratedMsg,
+      executeConfirmedAction,
+      closeConfirmModal,
+      renewSubFromAlert,
+      messageSubFromAlert,
+      completeNoteReminderFromAlert,
+      renewSubscriptionCycle,
+      toggleSubPaymentStatus,
+      deleteSubscriptionItem,
+      openMessageModal,
+      toggleNotePin,
+      toggleNoteChecklistItem,
+      deleteNoteItem,
+      copyNoteFullText
+    });
+
+    // Boot Application
+    applyThemeAndSettingsUI();
+    syncWithAndroidNativeBridge();
+    renderAll();
+    setInterval(checkDueAlarmsTick, 1000);
+    checkDueAlarmsTick();
+  </script>
+</body>
+</html>
